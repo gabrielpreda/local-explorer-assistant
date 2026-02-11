@@ -1,0 +1,130 @@
+manifest:
+  version: "0.1.3"
+  schema: https://a2as.org/cert/schema
+  subject:
+    name: gabrielpreda/local-explorer-assistant
+    source: https://github.com/gabrielpreda/local-explorer-assistant
+    branch: main
+    commit: "2f1306a8"
+    scope: [coordinator/agent.py, subagents/composer.py, subagents/discovery.py, subagents/routing.py]
+  issued:
+    by: A2AS.org
+    at: '2026-02-11T16:40:21Z'
+    url: https://a2as.org/certified/agents/gabrielpreda/local-explorer-assistant
+  signatures:
+    digest: sha256:EGojmf3d4jfGi8JDAaW64rkGmEbelPvTIm9DWRDvvak
+    key: ed25519:qNJLwxhE-NBMcMooRakGxHnYUdFBC1FWnGWV9jXJffc
+    sig: ed25519:Yxk2oHw0NWZStYaCWLJ8TqJifKuh972jZJhi2gjnwPXPE0SudIrZW0MoyEkiGtCUAvd8sTvjCLz-SvSY-cj6DA
+
+agents:
+  composer_agent:
+    type: instance
+    models: [gemini-2.5-pro]
+    params:
+      name: composer_agent
+      description: Composes a readable travel itinerary from routing information.
+      instruction: ['You are an itinerary composer. Given a route and points of interest, write a clear, friendly and concise
+          itinerary', 'for a tourist. Include times, locations, and helpful context.']
+  discovery_agent:
+    type: instance
+    models: [gemini-2.5-pro]
+    tools: [google_search]
+    params:
+      name: discovery_agent
+      description: Uses Google Search to discover relevant places.
+      instruction: ['You are a travel discovery agent. Use Google Search to find the most relevant places and activities for
+          a tourist,', based on given location and interests. Return a short list or paragraph., 'Note: this list will be
+          used further by the routing Agent.']
+  root_agent:
+    type: instance
+    models: [gemini-2.5-pro]
+    tools: [discovery_agent, routing_agent, composer_agent]
+    params:
+      name: local_explorer_assistant
+      description: Coordinates discovery, routing, and itinerary composition to plan a smart local day trip.
+      instruction: [You are a travel coordinator agent that creates a personalized itinerary for a traveler based on their
+          interests and available time., 'Ypu have access to three Agent Tools:', '- discovery_agent', '- routing_agent',
+        '- composer_agent', '- Use `discovery_agent` to find relevant places.', This would be the first action typically.,
+        '- Use `routing_agent` to plan the optimal route between those places.', Use this tool once you decided on a number
+          of places to visit., '- Use `composer_agent` to convert the raw route and POIs into a clear, human-readable itinerary.',
+        Use preferably markdown notation., '- Do not ask user for further clarifications. Just propose the attractions, route,
+          adding', 'hour information and distances, if you have these informations.', '- Allways offer one option for the
+          local exploration, do not create a conversational experience.', '- Do not ask the user for confirmation before calling
+          the tools.']
+  routing_agent:
+    type: instance
+    models: [gemini-2.5-pro]
+    tools: [google_maps_grounding]
+    params:
+      name: routing_agent
+      description: Estimates an optimal travel route using ADK v1.15+ google_maps_grounding tool.
+
+models:
+  gemini-2.5-pro:
+    type: literal
+    agents: [root_agent, routing_agent, composer_agent, discovery_agent]
+
+tools:
+  composer_agent:
+    type: agent
+    agents: [root_agent]
+    params:
+      wrapper: AgentTool
+      agent: composer_agent
+  discovery_agent:
+    type: agent
+    agents: [root_agent]
+    params:
+      wrapper: AgentTool
+      agent: discovery_agent
+  google_maps_grounding:
+    type: function
+    agents: [routing_agent]
+  google_search:
+    type: module
+    agents: [discovery_agent]
+  routing_agent:
+    type: agent
+    agents: [root_agent]
+    params:
+      wrapper: AgentTool
+      agent: routing_agent
+
+imports:
+  Agent: google.adk.agents.Agent
+  AgentTool: google.adk.tools.agent_tool.AgentTool
+  asyncio: asyncio
+  BaseModel: pydantic.BaseModel
+  composer_agent: subagents.composer.composer_agent
+  Content: google.genai.types.Content
+  discovery_agent: subagents.discovery.discovery_agent
+  FastAPI: fastapi.FastAPI
+  google_maps_grounding: google.adk.tools.google_maps_grounding
+  google_search: google.adk.tools.google_search
+  InMemorySessionService: google.adk.sessions.InMemorySessionService
+  List: typing.List
+  load_dotenv: dotenv.load_dotenv
+  logging: logging
+  Optional: typing.Optional
+  os: os
+  Part: google.genai.types.Part
+  routing_agent: subagents.routing.routing_agent
+  Runner: google.adk.runners.Runner
+  trip_planner_agent: coordinator.agent.root_agent
+  uuid: uuid
+
+functions:
+  init_runner:
+    type: async
+    module: main
+  plan_trip:
+    type: async
+    module: main
+    args: [request]
+
+variables:
+  USER_ID:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [main]
